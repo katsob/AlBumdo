@@ -235,13 +235,16 @@ class MainImage(Image):
         #TODO Score class?
         fn = self.get('image')
         fn = ''.join(fn.split('/'))
-        g = os.walk('scores/')\
-        dirpath, dirnames, filenames = g.__next__
-        while True;
+        g = os.walk('scores/', followlinks=True)
+        dirpath, dirnames, filenames = g.__next__()
+        while True:
             if fn in filenames:
-                return dirpath
+                return int(dirpath)
             else:
-                g.__next__
+                try:
+                    g.__next__()
+                except StopIteration:
+                    return 0
 
 
 
@@ -360,7 +363,8 @@ class ImageViewer(FloatLayout):
         elif keycode[1] == 'backspace':
             if not self.parent.parent.current == 'Menu':
                 self.parent.parent.current = 'Menu'
-                self.parent.parent.screens[0].children[0].refresh()
+                self.parent.parent.screens[0].clear_widgets()
+                self.parent.parent.screens[0].add_widget(MenuWindow(path='/home/lima/kivy/AlBumdo/photos'))
         return True
 
 
@@ -395,7 +399,7 @@ class ImageButton(ButtonBehavior, Image):
     def cover(self):
         p = self.path
         if any([os.path.isdir(os.path.join(p, x)) for x in os.listdir(p)]):
-            mini_covers = sample(self.photos_paths, 4)
+            mini_covers = sample(self.photos_paths, min(4, len(self.photos_paths)))
 
             file = BytesIO()
             w, h = self.size
@@ -410,8 +414,9 @@ class ImageButton(ButtonBehavior, Image):
             fileData = BytesIO(file.read())
             self.texture = CoreImage(fileData, ext='png').texture
         else:
-            self.source = self.photos_paths[0]
-            self.set_region()
+            if len(self.photos_paths):
+                self.source = self.photos_paths[0]
+                self.set_region()
 
     def crop_img(self, size):
         W, H = self.size # Window size related
@@ -467,14 +472,26 @@ class MenuWindow(TabbedPanel): #(Float...)
         self.th_dir = TabbedPanelHeader(text='Directories')
         self.th_dir.content = Tiles(path=path)
         self.th_cat = TabbedPanelHeader(text='Categories')
-        self.th_cat.content = Tiles(path='scores')
+        self.th_cat.content = Tiles(path='/home/lima/kivy/AlBumdo/scores')
         self.add_widget(self.th_dir)
         self.add_widget(self.th_cat)
         self.set_def_tab(self.th_dir)
 
+        self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
+        self._keyboard.bind(on_key_down=self._on_keyboard_down)
+
     def refresh(self):
-        self.th_dir.clear_widgets()
+        self.clear_widgets()
         self.add_widget(Tiles(path=self.path))
+
+    def _keyboard_closed(self):
+        self._keyboard.unbind(on_key_down=self._on_keyboard_down)
+        self._keyboard = None
+
+    def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
+        if keycode[1] in ['left', 'backspace', 'right']:
+            self.switch_to([i for i in self.tab_list if not i==self.current_tab][0])
+        return True
 
 
 class AlBumdoApp(App):
