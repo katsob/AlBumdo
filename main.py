@@ -88,8 +88,6 @@ class Photos:
         os.makedirs(self.del_dir, exist_ok=True)
         self.pos = 0
 
-        self.update_scores()
-
     def _load_photos(self):
         listOfFiles = self.list_image_files(self.path, with_dir=True)
         for d, x in listOfFiles:
@@ -97,7 +95,7 @@ class Photos:
                 created_time = os.path.getctime(x)
             except OSError:
                 created_time = 0
-            date = {'image': x, 'created': created_time, 'score': 0, 'dir': d}
+            date = {'image': x, 'created': created_time, 'dir': d}
             self.img_data.append(date)
         self.img_data.sort(key=lambda x: x['created'], reverse=True)
 
@@ -118,29 +116,6 @@ class Photos:
 
     def list_images(self):
         return [img['image'] for img in self.img_data]
-
-    def subset(self, cond=('score', 3)):
-        key, val = cond
-        path = val if key == 'dir' else None
-        new = Photos(source=path)
-        new.img_data = [i for i in self.img_data if i[key] == val]
-        new.img_data.sort(key=lambda x: x['created'], reverse=True)
-        new.pos = 0
-        new.del_dir = self.del_dir
-        new.path = path
-        return new
-
-    def update_scores(self):
-        pass
-    #     listOfFiles = list()
-    #     for img in self.img_data:
-    #         img['image']
-    #         listOfFiles += [
-    #             (dirpath, os.path.join(dirpath, file)) for file in filenames
-    #             if file.lower().endswith(
-    #                 ('.jpeg', '.jpg', '.png', '.gif', '.bmp', '.tif', '.tiff', '.ico', \
-    #                  '.mng', '.tga', '.psd', '.xcf', '.svg', '.icns')
-    #             )]
 
 
 class PreviewBar(BoxLayout):
@@ -171,7 +146,6 @@ class PreviewBar(BoxLayout):
                 img = MenuImage(source=self.meta.img_data[image_pos]['image'],
                                 image_pos=image_pos,
                                 selected=True if image_pos == self.meta.pos else False)
-
                 self.add_widget(img)
 
 
@@ -198,7 +172,6 @@ class MenuImage(ButtonBehavior, Image, MouseOver):
             self.opacity = 0.9
         self.size_hint = None, None
 
-
     def on_press(self):
         if not self.selected:
             self.parent.parent.change_to_image(self.image_pos)
@@ -220,16 +193,13 @@ class MainImage(Image):
         super().__init__(source=self.get('image'), **kwargs)
         self.pos = (0, 100)
         self.size_hint_x = 1
-        self.size_hint_y = None
+        self.size_hint_y = .8
 
     def set_pos(self):
         if self.meta.pos >= len(self.meta.img_data):
             return 0
         else:
             return self.meta.pos
-
-    def set_score(self, score):
-        self.meta.img_data[self.set_pos()]['score'] = score
 
     def get(self, key):
         return self.meta.img_data[self.set_pos()][key]
@@ -261,26 +231,29 @@ class MainImage(Image):
         self.source = self.get('image')
         self.reload()
         self.preview_bar.update()
-        self.parent.children[0].children[0].text = '*'*self.get('score')
+        self.parent.children[0].children[0].text = '*'*self.get_score()
 
 
 class ScoreButton(Button):
 
     def __init__(self, score, img, **kwargs):
         super().__init__(**kwargs)
-        self.score = score
+        self.score = str(score)
         self.text = '*'*score
         self.image = img
-        self.score_path = os.path.join('scores', str(score))
-        if not os.path.exists(self.score_path):
-            os.mkdir(self.score_path)
+        self.score_path = 'scores'
+        score_dir = os.path.join(self.score_path, self.score)
+        if not os.path.exists(score_dir):
+            os.mkdir(score_dir)
 
     def on_release(self):
         img_path = self.image.get('image')
         fn = ''.join(img_path.split('/'))
-        print('SCORE %i ADDED FOR PHOTO: %s' % (self.score, img_path))
-        self.image.set_score(self.score)
-        os.symlink(src=img_path, dst=os.path.join(self.score_path, fn))
+        for s in os.listdir(self.score_path):
+            old_score = os.path.join(self.score_path, s, fn)
+            if os.path.exists(old_score):
+                os.remove(old_score)
+        os.symlink(src=img_path, dst=os.path.join(self.score_path, self.score, fn))
         self.image.next_image()
 
 
@@ -293,7 +266,8 @@ class Options(BoxLayout):
         self.add_widget(ScoreButton(score=2, img=img))
         self.add_widget(ScoreButton(score=3, img=img))
         self.add_widget(Button(text='*'*img.get_score()))
-        self.size_hint_y = .05
+        self.size_hint_y = .04
+        # self.height = 35
         self.pos_hint = {'top': 1}
 
 
@@ -337,6 +311,13 @@ class ImageViewer(FloatLayout):
                     f"-_-{img['image'].split('/')[-1]}")
         shutil.move(img['image'],
                     os.path.join(self.photos.del_dir, del_name))
+
+        #clear score -> TODO to class Score
+        for r, d, f in os.walk('scores'):
+            for file in f:
+                if ''.join(img['image']) == file:
+                    os.unlink(os.path.join(r, file))
+
         self.change_to_image(self.photos.pos)
 
     def change_to_image(self, image_pos):
@@ -467,7 +448,7 @@ class MenuWindow(TabbedPanel): #(Float...)
         self.do_default_tab = False
         self.th_dir = TabbedPanelHeader(text='Directories')
         self.th_dir.content = Tiles(path=path)
-        self.th_cat = TabbedPanelHeader(text='Categories')
+        self.th_cat = TabbedPanelHeader(text='Ratings')
         self.th_cat.content = Tiles(path='/home/lima/kivy/AlBumdo/scores')
         self.add_widget(self.th_dir)
         self.add_widget(self.th_cat)
