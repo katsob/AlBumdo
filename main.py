@@ -157,20 +157,23 @@ class PreviewBar(BoxLayout):
 
     def update(self):
         self.clear_widgets()
+        n = len(self.meta.img_data)
         for i in range(self.images):
-            image_pos = self.meta.pos + i - int(math.floor(self.images/2))
-            #image_pos vary (-5, n+4)
-            correction = 2 if len(self.meta.img_data) < 3 else 1
-            if image_pos < 0:
-                image_pos += len(self.meta.img_data)*correction
-            if image_pos >= len(self.meta.img_data):
-                image_pos -= len(self.meta.img_data)*correction
+            if n>1:
+                image_pos = self.meta.pos + i - int(math.floor(self.images/2))
+                #image_pos vary (-5, n+4)
+                correction = 2 if n == 2 else 1
+                if image_pos < 0:
+                    image_pos += n*correction
+                if image_pos >= n:
+                    image_pos -= n*correction
 
-            img = MenuImage(source=self.meta.img_data[image_pos]['image'],
-                            image_pos=image_pos,
-                            selected=True if image_pos == self.meta.pos else False)
+                img = MenuImage(source=self.meta.img_data[image_pos]['image'],
+                                image_pos=image_pos,
+                                selected=True if image_pos == self.meta.pos else False)
 
-            self.add_widget(img)
+                self.add_widget(img)
+
 
     def size_change(self, width=1920):
         self.images = int(width / 100)
@@ -235,19 +238,12 @@ class MainImage(Image):
         #TODO Score class?
         fn = self.get('image')
         fn = ''.join(fn.split('/'))
-        g = os.walk('scores/', followlinks=True)
-        dirpath, dirnames, filenames = g.__next__()
-        while True:
+
+        score = 0
+        for dirpath, dirnames, filenames in os.walk('scores/', followlinks=True):
             if fn in filenames:
-                return int(dirpath)
-            else:
-                try:
-                    g.__next__()
-                except StopIteration:
-                    return 0
-
-
-
+                score = dirpath.split('/')[-1]
+        return int(score)
 
     def next_image(self):
         self.meta.pos += 1
@@ -479,10 +475,6 @@ class MenuWindow(TabbedPanel): #(Float...)
 
         self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
         self._keyboard.bind(on_key_down=self._on_keyboard_down)
-
-    def refresh(self):
-        self.clear_widgets()
-        self.add_widget(Tiles(path=self.path))
 
     def _keyboard_closed(self):
         self._keyboard.unbind(on_key_down=self._on_keyboard_down)
